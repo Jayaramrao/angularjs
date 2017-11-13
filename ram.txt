@@ -1,0 +1,310 @@
+<%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"
+    import="java.util.Locale,
+            com.businessobjects.clientaction.beans.LumiraViewBean,
+            com.businessobjects.webutil.clientaction.ActionHelper,
+            com.businessobjects.lumirastudio.client.PlatformPathHandler"%>
+<jsp:useBean id="wrapper"
+    class="com.businessobjects.webutil.wrapper.SingleBeanWrapper"
+    scope="request" />
+<%
+    // retrieve the bean and call init() to start the initialization chain which will call initBean() in your backing bean
+    wrapper.setBeanValueConditionally(LumiraViewBean.class);
+    LumiraViewBean viewBean = ((LumiraViewBean) wrapper.getBean());
+    viewBean.init(request);
+    response.setHeader("Expires", "0");
+    String timeStamp = com.sap.ip.bi.zen.rt.framework.shared.ZENCacheBuster.getTimestamp();
+    Boolean isAggregated = !Boolean.getBoolean("hilo.disable.aggregation");
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<META Http-Equiv="Cache-Control" Content="no-cache">
+<META Http-Equiv="Pragma" Content="no-cache">
+<META Http-Equiv="Expires" Content="0">
+<meta http-equiv="X-UA-Compatible" content="IE=10">
+<meta name="application-name">
+<link type="text/css" href="css/acquisitionPanel.css" rel="stylesheet" />
+<link type="text/css" href="css/FPAIcons.css" rel="stylesheet" />
+<link type="text/css" href="css/LumxLoadingOverlay.css" rel="stylesheet" />
+<!-- Performance improvement fix: Same js-bundle is loaded in Web.do call of zen  which now will be fetched from cache  -->
+<script src="zen/mimes/combined_static_includes_1.js?version=<%= timeStamp %>"></script>
+<script type="text/javascript"
+    src="zen.res&#x2f;zen.rt.uiframework&#x2f;cvom&#x2f;libs&#x2f;canvg.js?version=<%= timeStamp%>"></script>
+<script type="text/javascript"
+    src="zen.res&#x2f;zen.rt.uiframework&#x2f;cvom&#x2f;libs&#x2f;rgbcolor.js?version=<%= timeStamp%>"></script>
+<script src="js/callback.js"></script>
+<script src="lumira.res/tp/thirdPartyCombine.js"></script>
+<script type="text/javascript"
+    src="resources/~<%= timeStamp %>~/sap-ui-dis.js" charset="utf-8"
+    id="sap-ui-bootstrap" data-sap-ui-libs="sap.m,sap.zen.crosstab"
+    data-sap-ui-language="en" data-sap-ui-theme="lumira_simplite"
+    data-sap-ui-xx-bindingsyntax="complex"></script>
+<script type="text/javascript">
+    //Find Browser.
+    var browserArr = (function(){
+        var ua= navigator.userAgent, tem,
+        M= ua.match(/(opera|chrome|safari|firefox|msie|trident(?=\/))\/?\s*(\d+)/i) || [];
+        if(/trident/i.test(M[1])){
+            tem=  /\brv[ :]+(\d+)/g.exec(ua) || [];
+            return 'IE '+(tem[1] || '');
+        }
+        if(M[1]=== 'Chrome'){
+            tem= ua.match(/\b(OPR|Edge)\/(\d+)/);
+            if(tem!= null) return tem.slice(1).join(' ').replace('OPR', 'Opera');
+        }
+        M= M[2]? [M[1], M[2]]: [navigator.appName, navigator.appVersion, '-?'];
+        if((tem= ua.match(/version\/(\d+)/i))!= null) M.splice(1, 1, tem[1]);
+        return M.join(' ');
+    })().split(" ");
+    document.LUMX_BROWSER = {
+        browser : browserArr[0],
+        version : browserArr[1]
+    };
+
+    //Define LagacyVizBinding as empty function as sdkHtml5Charts are not required for lumx docs
+    define("zen.rt.components.vizframe/js/legacy/LegacyVizBindingService", [], function(){});
+    var appContextParams = {manipCssBase:'lumira.res/css/'};
+    window.appContextParams = appContextParams;
+    window.appContextParams.installType = "addon";
+    var _ExtLoadPromise = $.ajax({
+        type: "GET",
+        url: "sap/vizext/?installType=" + window.appContextParams.installType,
+        async: true,
+    });    
+    
+    window.appContextParams.isAcquisition = <%="true".equals(ActionHelper.getParameter(request, null, "isAcquisition"))%>;
+    window.appContextParams.isVISILums = <%="true".equals(ActionHelper.getParameter(request, null, "isAcquisition"))?false:viewBean.isVISILums()%>;
+    window.appContextParams.bookmarkInfo = {
+        recentBookmarks : '<%=viewBean.getRecentBookmarks()%>',
+        defaultBookmark : '<%=viewBean.getDefaultBookmark()%>',
+        isBookmarkApplied : false
+    };
+    if(window.parent.isMainWindow && window.parent.getActiveTab) { // if true document is opened in BI. else document is opened using CMC
+        appContextParams.currentTab = window.parent.getActiveTab();
+    }
+    
+    var showErrorFlag = window.appContextParams.isVISILums;
+    var errorMessage;
+    if (showErrorFlag) {
+        errorMessage = "Cannot access the document created using older format of Lumira";
+    }
+    //This is to get the relative baseURL of LumiraWebApp
+    var LumiraWebApp_root = '<%=PlatformPathHandler.getBipRoot()%>';
+    LumiraWebApp_root = LumiraWebApp_root.split('/').join('');
+    var locationPath = window.location.pathname;
+    var lumiraWebAppUrl = locationPath.slice(0,locationPath.indexOf(LumiraWebApp_root) + LumiraWebApp_root.length);
+
+    showErrorFlag = <%=!viewBean.isDiscoverySupported() && viewBean.isLumiraOrigin()%> || (window.appContextParams.isAcquisition && <%=!viewBean.isDiscoverySupported()%>);
+    if (showErrorFlag) {
+        errorMessage = "<%=viewBean.getResourceBundle().getString("lumira.discovery.document.unsupported")%>";
+    } else {
+        // Throw error incase of Online documents when refresh right is denied for the user
+        showErrorFlag = <%="true".equals(ActionHelper.getParameter(request, null, "isAcquisition"))?false:viewBean.isRefreshDeniedforOnline()%>;
+        if (showErrorFlag) {
+            errorMessage = "<%=viewBean.getResourceBundle().getString("REFRESH_ERROR")%>";
+        }
+    }
+    sap.ludsi = sap.ludsi || {};
+    require(["zen.res/zen.rt.components.lumira/common/js/messageBundle/MessageBundle"]);
+    require(["zen.res/zen.rt.components.lumira/common/js/widgets/Dialog"],function(dialog){
+        jQuery.sap.declare("sap.lumira.commons.facets.FacetItem");
+        sap.ludsi.Dialog = dialog;
+        if (document.LUMX_BROWSER.browser === "Firefox") {
+            if (<%=viewBean.isLumiraOrigin() && viewBean.getDefaultApp().equals("BIAPP_TEMPLATE")%>) {
+                errorMessage = "<%=viewBean.getResourceString("lumira.discovery.unsupported.browser")%>";
+            }
+        }
+        if (errorMessage){
+            var options = {};
+            options.message = errorMessage;
+            sap.ludsi.Dialog.showError(options, function(){
+                if(window.appContextParams.currentTab) { // We are in BI
+                    window.appContextParams.currentTab.removeTab();
+                    var homeTab = window.parent.INFOVIEW.homeTab;
+                    homeTab.fOnClick();
+                } else { // We are in CMC
+                    window.parent.close();
+                }
+            });
+            $("#lumx_loading").remove();
+        }
+    });
+
+    if (!showErrorFlag) {
+        sap.ludsi = sap.ludsi || {};
+        window.sessionStorage.setItem("baseURL", lumiraWebAppUrl);
+        var localeLanguage = '<%=viewBean.getLocale()%>';
+        if (localeLanguage.length >= 2) {
+            var trimmedLocale = localeLanguage.substring(0,2);
+            if(trimmedLocale !== "zh"){
+                localeLanguage = trimmedLocale;
+            }
+            sap.ui.getCore().getConfiguration().setLanguage(localeLanguage);
+        }
+
+        window["sap-ui-config"] = {
+            language : localeLanguage,
+            formatLocale : localeLanguage,
+            theme : 'vi_theme',
+            libs : "sap.m,sap.ui.layout,sap.vi.components,sap.vi.app, sap.vi.extensions",
+            'data-sap-ui-language' : localeLanguage
+        }
+
+        var isLumiraOrigin = "<%=viewBean.isLumiraOrigin()%>";
+        var defaultApp = "<%=viewBean.getDefaultApp()%>";
+        var btToken = "<%=viewBean.getBttoken()%>";
+
+        var rtl = <%=viewBean.getRTL()%>;
+        if (rtl === true && defaultApp !== 'BIAPP_TEMPLATE') {
+            sap.ui.getCore().getConfiguration().setRTL(true);
+        }
+        window.sessionStorage.setItem("hasSaveWithData", <%=viewBean.isHasSaveWithData()%>);
+        window.sessionStorage.setItem("csrfToken", btToken);
+        window.sessionStorage.setItem("formDataForOpenDoc", "<%=viewBean.getFormDataForOpenDoc()%>");
+        window.sessionStorage.setItem("locale", "<%=viewBean.getLocale()%>");
+        document.LUMX_DOC_INFO = {
+            docName : "<%=viewBean.getName()%>",
+            docCUID : "<%=viewBean.getDocCUID()%>",
+            docDescription : decodeURI("<%=viewBean.getDocDescription()%>")
+        };
+        if (defaultApp === 'BIAPP_TEMPLATE' || window.appContextParams.isAcquisition) {
+            registerModulePathsforLumira();
+            if(window.appContextParams.isAcquisition){
+                require(['js/sap/vi/acquisition/AcquisitionHelper', 'js/sap/vi/server/lumiraApp'],
+                    function(AcquisitionHelper, lumiraApp) {
+                    AcquisitionHelper.initAcquisitionWorkflow(openBiappTemplate);
+                });
+            } else {
+                displayHeaderInfo('', 1, document.LUMX_DOC_INFO.docName);
+                openBiappTemplate();
+            }
+        } else {
+            displayHeaderInfo('', 1, document.LUMX_DOC_INFO.docName);
+            //If LUMX published from DS Designer
+            ajaxDoCall();
+        }
+
+        function registerModulePathsforLumira(){
+            //If LUMX published from Discovery Client
+            jQuery.sap.registerModulePath("boe.integration", "lumira.res/boe/integration");
+            jQuery.sap.registerModulePath("sap.zen", "resources/~" + <%= timeStamp %> + "~/sap/zen");
+            jQuery.sap.registerModulePath("sap.vi", "lumira.res/sap/vi");
+            jQuery.sap.registerModulePath("sap.vi.server.services", "js/sap/vi/server/services");
+            jQuery.sap.registerModulePath("sap.vi.server.model.addonModel", "js/sap/vi/server/model/addonModel");
+            jQuery.sap.registerModulePath("sap.vi.server.model.addonModelController", "js/sap/vi/server/model/addonModelController");
+            jQuery.sap.registerModulePath("sap.ui.thirdparty.jqueryui", "lumira.res/tp/jquery-ui");
+            /*  waitSeconds is set to 0, so that it will not timeout without loading JS files */
+            require.config({
+                waitSeconds: 0
+            });
+            LUMIRA_ENVIRONMENT = true;
+            // We are defining sap.zen.designmode by initializing only UDCMode property, but other funtions and properties will be undefined
+            //In case of online documents with prompts, designmode is not getting initialized and throwing error
+            /* if (!sap.zen.designmode) {
+                sap.zen.designmode = {};
+                sap.zen.designmode.UDCMode = true;
+            }*/
+            require(["zen.res/zen.rt.components.lumira/common/js/busyindicator/GlobalBusyIndicator"]);
+            require(["zen.res/zen.rt.components.lumira/common/js/busyindicator/BusyIndicator"]);
+            require(["zen.res/zen.rt.components.lumira/common/js/progressbar/ProgressBar"]);
+
+            var handler = function() {
+                var workspaceId = window && window.hiloModel
+                        && window.hiloModel.getCurrentWorkspace()
+                        && window.hiloModel.getCurrentWorkspace().getId();
+                if (workspaceId) {
+                    if(window.appContextParams.dummyDocCuid){
+                        window.hiloServices.closeWSandDeleteDummyDoc(workspaceId, window.appContextParams.dummyDocCuid);
+                    } else {
+                        window.hiloServices.closeWorkspace(workspaceId);
+                    }
+                    return false;
+                }
+            };
+            window.addEventListener("unload", handler);
+        }
+
+        function openBiappTemplate() {
+            require([ 'js/sap/vi/server/lumiraApp', 'js/sap/vi/addonAppBootstrap',
+                    'js/IconLoader' ], function(lumiraApp, addonAppBootstrap,
+                    iconLoader) {
+                var bundleFilter = {};
+                $(document).ready(function() {
+                    iconLoader.loadIcons();
+                    _ExtLoadPromise.then(function(data){
+                        window.sessionStorage.setItem("LUMXExtensions", data);
+                        addonAppBootstrap(bundleFilter, "en",<%= timeStamp %>);
+                    });
+                });
+            });
+        }
+
+        function closeCurrentBipTab() {
+            if (window.appContextParams.currentTab) { // We are in BI
+                window.appContextParams.currentTab.removeTab();
+                var homeTab = window.parent.INFOVIEW.homeTab;
+                homeTab.fOnClick();
+            } else { // We are in CMC
+                window.parent.close();
+            }
+        }
+
+        function ajaxDoCall() {
+            var oUrl = 'web.do';
+            var sURL = window.document.URL.toString();
+            var arrParams = sURL.split("?");
+            var formDataForOpenDoc = window.sessionStorage
+                    .getItem("formDataForOpenDoc");
+            if (formDataForOpenDoc !== "null") {
+                oUrl = oUrl + '?' + formDataForOpenDoc;
+            } else {
+                oUrl = oUrl + '?' + arrParams[1];
+            }
+            var csrfToken = window.sessionStorage.getItem("csrfToken");
+            var headers = {
+                "csrfToken" : csrfToken
+            };
+            headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+            var requestConfig = {
+                contentType : 'application/x-www-form-urlencoded; charset=UTF-8',
+                jsonp : false,
+                url : oUrl,
+                type : "POST",
+                headers : headers,
+                async : true,
+                success : function(incomingData) {
+                    document.getElementById('lumx_loading').style.display = 'none';
+                    document.getElementById("docContainer").innerHTML = incomingData;
+                    var divElement = document.getElementById("docContainer");
+                    var scripts = divElement.getElementsByTagName("script");
+                    for (var i = 0; i < scripts.length; i++) {
+                        var script = scripts[i];
+                        eval(script.innerHTML);
+                    }
+                }
+            };
+            var promise = $.ajax(requestConfig);
+            promise.then(function(incomingData) {
+                //Implement if any response modification is needed
+            });
+            promise.done(function(incomingData) {
+                //Implement the finalizing code if necessary
+            });
+            promise.fail(function(XMLHttpRequest, textStatus, errorThrown) {
+                console.log("XMLHttpRequest : " + XMLHttpRequest);
+                console.log("Error : " + errorThrown);
+                console.log("TextStatus : " + textStatus);
+            });
+        }
+    }
+</script>
+</head>
+<body class="sapUiBody sapUiSizeCompact" role="application">
+    <div id="docContainer" style="width: 100%; height: 100%">
+        <div id="lumx_loading" style="display: block;">
+            <div id="customGlasspaneLumx" class="customGlasspaneLumxClass lumxGlasspaneOpacity"></div>
+            <div id="customLoadingIndicatorLumx" class="customLoadingIndicatorLumxClass"></div>
+        </div>
+    </div>
+</body>
+</html>
